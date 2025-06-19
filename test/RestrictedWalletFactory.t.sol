@@ -189,7 +189,7 @@ contract RestrictedWalletFactoryTest is Test {
 
     // ============ Edge Cases ============
 
-    function test_EmptyWalletsList() public {
+    function test_EmptyWalletsList() public view {
         address[] memory allWallets = walletFactory.getAllWallets();
         assertEq(allWallets.length, 0);
     }

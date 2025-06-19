@@ -59,7 +59,7 @@ contract LoanManagerTest is Test {
         lendingPool.deposit(POOL_DEPOSIT, investor);
     }
 
-    function test_InitialState() public {
+    function test_InitialState() public view {
         assertEq(address(loanManager.lendingPool()), address(lendingPool));
         assertEq(address(loanManager.collateralManager()), address(collateralManager));
         assertEq(address(loanManager.walletFactory()), address(walletFactory));

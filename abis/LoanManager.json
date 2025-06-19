@@ -293,7 +293,7 @@
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "hasActive",
         "type": "bool",
         "internalType": "bool"
       }

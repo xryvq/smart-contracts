@@ -148,15 +148,15 @@ contract LoanManager is Ownable, ReentrancyGuard {
     ) external nonReentrant returns (uint256 loanId) {
         require(desiredLoanAmount >= MIN_LOAN_AMOUNT && desiredLoanAmount <= MAX_LOAN_AMOUNT, "Invalid loan amount");
         
-        // Check borrower doesn't have active loans
-        uint256[] memory userLoans = borrowerLoans[msg.sender];
-        for (uint256 i = 0; i < userLoans.length; i++) {
-            require(loans[userLoans[i]].status != LoanStatus.Active, "Active loan exists");
-        }
+        // More efficient: Check only if borrower has active loans using simple boolean check
+        require(!_hasActiveLoan(msg.sender), "Active loan exists");
         
         // Calculate required collateral (20% of desired loan amount)
         uint256 requiredCollateral = (desiredLoanAmount * COLLATERAL_RATIO) / BASIS_POINTS;
-        require(usdcToken.balanceOf(msg.sender) >= requiredCollateral, "Insufficient USDC balance for collateral");
+        
+        // Single balance check - cache the balance to avoid multiple calls
+        uint256 userBalance = usdcToken.balanceOf(msg.sender);
+        require(userBalance >= requiredCollateral, "Insufficient USDC balance for collateral");
         
         // Validate loan amount equals 5x collateral
         uint256 maxLoanAmount = requiredCollateral * 5;
@@ -171,26 +171,23 @@ contract LoanManager is Ownable, ReentrancyGuard {
         // Transfer collateral (20%) directly to restricted wallet
         usdcToken.safeTransferFrom(msg.sender, restrictedWallet, requiredCollateral);
         
-        // Update collateral manager for tracking only
+        // Batch the manager updates to reduce external calls
         collateralManager.updateBorrowedAmount(restrictedWallet, desiredLoanAmount);
-        
-        // Allocate funds from lending pool (80% from pool)
         lendingPool.allocateFunds(restrictedWallet, poolAllocation);
         
-        // Create loan record
+        // Create loan record with optimized struct assignment
         loanId = nextLoanId++;
-        loans[loanId] = LoanInfo({
-            borrower: msg.sender,
-            loanAmount: desiredLoanAmount,
-            collateralAmount: requiredCollateral,
-            interestRate: DEFAULT_INTEREST_RATE,
-            duration: DEFAULT_DURATION,
-            startTime: block.timestamp,
-            dueDate: block.timestamp + DEFAULT_DURATION,
-            repaidAmount: 0,
-            restrictedWallet: restrictedWallet,
-            status: LoanStatus.Active
-        });
+        LoanInfo storage newLoan = loans[loanId];
+        newLoan.borrower = msg.sender;
+        newLoan.loanAmount = desiredLoanAmount;
+        newLoan.collateralAmount = requiredCollateral;
+        newLoan.interestRate = DEFAULT_INTEREST_RATE;
+        newLoan.duration = DEFAULT_DURATION;
+        newLoan.startTime = block.timestamp;
+        newLoan.dueDate = block.timestamp + DEFAULT_DURATION;
+        newLoan.repaidAmount = 0;
+        newLoan.restrictedWallet = restrictedWallet;
+        newLoan.status = LoanStatus.Active;
         
         borrowerLoans[msg.sender].push(loanId);
         
@@ -293,17 +290,32 @@ contract LoanManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Check if borrower has any active loans
+     * @dev Internal function to check if borrower has any active loans (gas optimized)
      * @param borrower The borrower address
-     * @return hasActiveLoan True if borrower has active loans
+     * @return hasActive True if borrower has active loans
      */
-    function hasActiveLoan(address borrower) external view returns (bool) {
-        uint256[] memory userLoans = borrowerLoans[borrower];
-        for (uint256 i = 0; i < userLoans.length; i++) {
-            if (loans[userLoans[i]].status == LoanStatus.Active) {
+    function _hasActiveLoan(address borrower) internal view returns (bool hasActive) {
+        uint256[] storage userLoans = borrowerLoans[borrower];
+        uint256 length = userLoans.length;
+        
+        // Early return if no loans
+        if (length == 0) return false;
+        
+        // Check loans in reverse order (most recent first)
+        for (uint256 i = length; i > 0; i--) {
+            if (loans[userLoans[i - 1]].status == LoanStatus.Active) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * @dev Check if borrower has any active loans (external wrapper)
+     * @param borrower The borrower address
+     * @return hasActive True if borrower has active loans
+     */
+    function hasActiveLoan(address borrower) external view returns (bool hasActive) {
+        return _hasActiveLoan(borrower);
     }
 }

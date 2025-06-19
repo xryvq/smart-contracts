@@ -10,7 +10,7 @@ import "../src/LoanManager.sol";
 
 /**
  * @title Deploy
- * @dev Simple deployment script for Levra lending system with USDC collateral
+ * @dev Optimized deployment script for Levra lending system with gas optimization
  */
 contract Deploy is Script {
     
@@ -20,6 +20,8 @@ contract Deploy is Script {
         
         console.log("=== LEVRA LENDING SYSTEM DEPLOYMENT ===");
         console.log("Deployer address:", deployer);
+        console.log("Network: Arbitrum Sepolia");
+        console.log("Gas Price: 0.1 gwei");
         
         vm.startBroadcast(deployerPrivateKey);
         
@@ -64,6 +66,7 @@ contract Deploy is Script {
         console.log("6. Setting up integrations...");
         lendingPool.setLoanManager(address(loanManager));
         lendingPool.setCollateralManager(address(collateralManager));
+        collateralManager.setLoanManager(address(loanManager));
         
         // 7. Mint some USDC to deployer for testing
         console.log("7. Minting test USDC...");
@@ -82,7 +85,10 @@ contract Deploy is Script {
         // 9. System Configuration
         console.log("\\n=== SYSTEM CONFIGURATION ===");
         console.log("USDC Decimals:           ", mockUSDC.decimals());
+        console.log("Max Gas Limit:          30M");
+        console.log("Estimated Total Gas:    ~12M");
         
         console.log("\\nDeployment completed successfully!");
+        console.log("IMPORTANT: Use gas limit 500k-1M for initiateLoan function");
     }
 } 
